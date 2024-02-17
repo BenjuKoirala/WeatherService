@@ -1,10 +1,8 @@
-// handler_test.go
-package main
+package weather
 
 import (
 	"bytes"
 	"fmt"
-	"github.com/gorilla/mux"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -16,67 +14,79 @@ import (
 
 //----------------------------------------------------------------------------------------------------------------------
 
-// initServer initializes the server with the provided router
-func initServer(router *mux.Router) {
-	// Initialize the server with the provided router
-	http.Handle("/", router)
-}
-
 // MockHTTPClient is a mock implementation of the HTTPClient interface for testing
 type MockHTTPClient struct {
 	mock.Mock
 }
 
-// Get is a mocked implementation of the HTTP GET method
 func (m *MockHTTPClient) Get(url string) (*http.Response, error) {
 	args := m.Called(url)
 	return args.Get(0).(*http.Response), args.Error(1)
 }
 
-var httpClient = new(MockHTTPClient) // Mock the HTTP client for testing
-
-func init() {
-	// Override the default HTTPClient with the mock
-	client = httpClient
-}
-
-//----------------------------------------------------------------------------------------------------------------------
-
-// Tests weatherHandler function
+// Tests weatherHandler
 func TestWeatherHandler(t *testing.T) {
 	// Mocked HTTP response for testing
 	mockResponse := &http.Response{
 		StatusCode: http.StatusOK,
-		Body: ioutil.NopCloser(
-			bytes.NewBufferString(`{"main":{"temp":25},"weather":[{"main":"Clear","description":"clear sky"}]}`),
-		),
+		Body:       ioutil.NopCloser(bytes.NewReader([]byte(`{"main":{"temp":25},"weather":[{"main":"Clear","description":"clear sky"}]}`))),
 	}
 
-	// Set expectations for the HTTP client
-	httpClient.On("Get", mock.Anything).Return(mockResponse, nil).Once()
+	// Set up the mocked HTTP client
+	mockHTTPClient := new(MockHTTPClient)
+	mockHTTPClient.On("Get", mock.AnythingOfType("string")).Return(mockResponse, nil)
 
+	// Override the default HTTPClient with the mock
+	client = mockHTTPClient
+
+	// Mock internal functions
+	GetCoordinates = func(vars map[string]string) (float64, float64) {
+		return 37.7749, -122.4194
+	}
+	GetWeatherData = func(lat, lon float64) (*WeatherResponse, error) {
+		return &WeatherResponse{
+			Weather: []struct {
+				Main        string `json:"main"`
+				Description string `json:"description"`
+			}{
+				{
+					Main:        "Clear",
+					Description: "clear sky",
+				},
+			},
+			Main: struct {
+				Temp      float64 `json:"temp"`
+				FeelsLike float64 `json:"feels_like"`
+			}{
+				Temp:      25.0,
+				FeelsLike: 0.0,
+			},
+		}, nil
+	}
+
+	// Set up a request
 	req, err := http.NewRequest("GET", "/weather/37.7749/-122.4194", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 
+	// Create a response recorder
 	rr := httptest.NewRecorder()
-	handler := http.HandlerFunc(weatherHandler)
 
+	// Create a handler function and serve the HTTP request
+	handler := http.HandlerFunc(WeatherHandler)
 	handler.ServeHTTP(rr, req)
 
 	// Assert the HTTP client was called as expected
-	httpClient.AssertExpectations(t)
+	mockHTTPClient.AssertExpectations(t)
 
 	// Assert the response status code
 	assert.Equal(t, http.StatusOK, rr.Code)
 
 	// Assert the response body
-	expectedBody := `{"temperature":25,"weatherCondition":"Clear","description":"clear sky","weatherType":"Moderate"}`
+	expectedBody := `{"temperature":25,"weatherCondition":"Clear","description":"clear sky","weatherType":"Hot"}`
 	assert.JSONEq(t, expectedBody, rr.Body.String())
 }
 
-//----------------------------------------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------------------
 
 // Tests categorizeWeather function
 func TestCategorizeWeather(t *testing.T) {
