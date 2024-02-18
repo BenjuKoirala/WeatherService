@@ -9,8 +9,8 @@ Edit the config file and add API key before deploying the application
 
 ### GET /weather/{latitude}/{longitude}
 #### Path Variables:
-* latitude - float64
-* longitude - float64
+* lat - float64
+* lon - float64
 
 #### Sample Response
 ```
