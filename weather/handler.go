@@ -169,6 +169,10 @@ func getWeatherData(lat, lon float64) (*WeatherResponse, error) {
 		handlerLog.Errorf("Error making HTTP request: %v", err)
 		return nil, err
 	}
+	if response.StatusCode == 401 {
+		handlerLog.Errorf("Make sure API key is valid: %s", response.Status)
+		return nil, fmt.Errorf(response.Status)
+	}
 	if response.StatusCode != 200 {
 		handlerLog.Errorf("Received non-200 status code: %s", response.Status)
 		return nil, fmt.Errorf(response.Status)
